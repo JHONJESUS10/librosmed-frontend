@@ -1,18 +1,32 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
+import AuthModal from './AuthModal'
 
 // ═══════════════════════════════════
 //  CAMBIA ESTE NÚMERO POR EL TUYO
-//  Perú: 51 + 9 dígitos
 const WHATSAPP_NUMBER = '51983553140'
 // ═══════════════════════════════════
 
 export default function CheckoutModal({ items, total, onClose, clearCart }) {
-  const [step,  setStep]  = useState('form')
-  const [form,  setForm]  = useState({ name: '', email: '' })
-  const [error, setError] = useState('')
+  const [step,       setStep]       = useState('form')   // 'form' | 'success'
+  const [form,       setForm]       = useState({ name: '', email: '' })
+  const [error,      setError]      = useState('')
+  const [showAuth,   setShowAuth]   = useState(false)
+  const [user,       setUser]       = useState(null)
 
   const envio      = total >= 150 ? 0 : 10
   const totalFinal = (total + envio).toFixed(2)
+
+  // Verificar si ya hay sesión activa
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('lm_user')
+      if (saved) {
+        const u = JSON.parse(saved)
+        setUser(u)
+        setForm(p => ({ ...p, name: u.name || '', email: u.email || '' }))
+      }
+    } catch {}
+  }, [])
 
   const handleSubmit = (e) => {
     e.preventDefault()
@@ -39,6 +53,18 @@ export default function CheckoutModal({ items, total, onClose, clearCart }) {
     setStep('success')
   }
 
+  const handleAuthSuccess = (u) => {
+    setUser(u)
+    setShowAuth(false)
+  }
+
+  const handleLogout = () => {
+    localStorage.removeItem('lm_token')
+    localStorage.removeItem('lm_user')
+    setUser(null)
+    setForm(p => ({ ...p, name: '', email: '' }))
+  }
+
   return (
     <>
       {/* Overlay */}
@@ -48,7 +74,7 @@ export default function CheckoutModal({ items, total, onClose, clearCart }) {
       {/* Modal */}
       <div className="fixed inset-0 z-[3001] flex items-center justify-center p-4">
         <div className="w-full max-w-md bg-obsidian-100 rounded-3xl overflow-hidden animate-scale-up"
-          style={{ boxShadow: '0 32px 80px rgba(0,0,0,0.8), 0 0 0 1px rgba(255,255,255,0.07)' }}>
+          style={{ boxShadow: '0 32px 80px rgba(0,0,0,0.8), 0 0 0 1px rgba(255,255,255,0.07)', maxHeight: '90vh', overflowY: 'auto' }}>
 
           {/* Gold top line */}
           <div className="h-0.5 bg-gradient-to-r from-transparent via-yellow-500 to-transparent" />
@@ -75,30 +101,75 @@ export default function CheckoutModal({ items, total, onClose, clearCart }) {
             {step === 'form' && (
               <form onSubmit={handleSubmit} className="space-y-5">
 
-                {/* Order summary */}
+                {/* Si hay sesión activa — mostrar usuario */}
+                {user ? (
+                  <div className="flex items-center justify-between px-4 py-3 rounded-2xl"
+                    style={{ background: 'rgba(212,168,83,0.08)', border: '1px solid rgba(212,168,83,0.2)' }}>
+                    <div className="flex items-center gap-3">
+                      <div className="w-9 h-9 rounded-full flex items-center justify-center text-sm font-black"
+                        style={{ background: 'rgba(212,168,83,0.2)', color: '#d4a853' }}>
+                        {user.name?.charAt(0).toUpperCase()}
+                      </div>
+                      <div>
+                        <p className="text-white text-sm font-semibold font-sans leading-tight">{user.name}</p>
+                        <p className="text-white/35 text-xs font-sans">{user.email}</p>
+                      </div>
+                    </div>
+                    <button type="button" onClick={handleLogout}
+                      className="text-white/25 hover:text-white/60 text-xs font-sans transition-colors">
+                      Salir
+                    </button>
+                  </div>
+                ) : (
+                  /* Sin sesión — botón para iniciar/registrar */
+                  <button type="button" onClick={() => setShowAuth(true)}
+                    className="w-full flex items-center justify-between px-4 py-3 rounded-2xl transition-all group"
+                    style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)' }}>
+                    <div className="flex items-center gap-3">
+                      <div className="w-9 h-9 rounded-full bg-white/6 flex items-center justify-center text-white/30 text-lg">
+                        👤
+                      </div>
+                      <div className="text-left">
+                        <p className="text-white/60 text-sm font-semibold font-sans group-hover:text-white transition-colors">
+                          ¿Tienes cuenta? Inicia sesión
+                        </p>
+                        <p className="text-white/25 text-xs font-sans">O continúa sin registrarte</p>
+                      </div>
+                    </div>
+                    <span className="text-white/20 group-hover:text-white/50 transition-colors">→</span>
+                  </button>
+                )}
+
+                {/* Resumen del pedido */}
                 <div className="rounded-2xl border border-white/8 bg-obsidian-50 p-5 space-y-2.5">
                   <p className="eyebrow text-[0.65rem] mb-3">Tu pedido</p>
                   {items.map(i => (
-                    <div key={i.id} className="flex justify-between text-xs font-sans text-white/40">
-                      <span className="truncate max-w-[65%]">{i.title} ×{i.quantity}</span>
-                      <span className="text-white/60 font-semibold ml-2 shrink-0">
+                    <div key={i.id} className="flex justify-between items-start gap-3">
+                      <span className="text-white/60 text-xs font-sans leading-snug flex-1">
+                        {i.title}
+                        <span className="text-white/30 ml-1">×{i.quantity}</span>
+                      </span>
+                      <span className="text-white text-xs font-semibold font-sans shrink-0">
                         S/. {(parseFloat(i.price) * i.quantity).toFixed(2)}
                       </span>
                     </div>
                   ))}
-                  <div className="pt-3 mt-1 border-t border-white/6 flex justify-between items-center">
-                    <span className="text-xs text-white/30 font-sans">
-                      Envío: <span className={envio === 0 ? 'text-emerald-400' : 'text-white/50'}>
+                  <div className="border-t border-white/6 pt-3 mt-3 space-y-1.5">
+                    <div className="flex justify-between items-center">
+                      <span className="text-white/35 text-xs font-sans">
+                        Envío {envio === 0 && <span className="text-emerald-400 font-semibold">GRATIS 🎉</span>}
+                      </span>
+                      <span className="text-white/35 text-xs font-sans">
                         {envio === 0 ? 'GRATIS 🎉' : 'S/. 10.00'}
                       </span>
-                    </span>
+                    </div>
                     <span className="font-display font-black text-2xl text-gradient-gold">
                       S/. {totalFinal}
                     </span>
                   </div>
                 </div>
 
-                {/* Fields */}
+                {/* Nombre */}
                 <div>
                   <label className="field-label">Tu nombre *</label>
                   <input
@@ -109,6 +180,7 @@ export default function CheckoutModal({ items, total, onClose, clearCart }) {
                   />
                 </div>
 
+                {/* Correo */}
                 <div>
                   <label className="field-label">
                     Correo <span className="text-white/20 font-normal normal-case tracking-normal">(opcional)</span>
@@ -139,45 +211,84 @@ export default function CheckoutModal({ items, total, onClose, clearCart }) {
               </form>
             )}
 
-            {/* SUCCESS */}
+            {/* SUCCESS — aquí se muestra el banner de registro */}
             {step === 'success' && (
-              <div className="text-center space-y-6">
-                <div className="w-20 h-20 rounded-full bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center mx-auto">
-                  <span className="text-4xl">✓</span>
-                </div>
-                <div>
-                  <h3 className="font-display text-2xl font-bold text-white mb-2">
-                    Pedido enviado
-                  </h3>
-                  <p className="text-white/40 text-sm font-sans leading-relaxed">
-                    WhatsApp se abrió con tu resumen.<br />
-                    <strong className="text-white/70">Envía el mensaje</strong> para confirmar.
-                  </p>
-                </div>
-
-                <div className="rounded-2xl border border-white/6 bg-obsidian-50 p-5 text-left space-y-3">
-                  {[
-                    ['1', 'Envía el mensaje en WhatsApp'],
-                    ['2', 'Confirmamos disponibilidad'],
-                    ['3', 'Coordinamos entrega y pago'],
-                  ].map(([n, t]) => (
-                    <div key={n} className="flex items-center gap-3">
-                      <div className="w-7 h-7 rounded-full bg-yellow-500/20 border border-yellow-500/30 text-yellow-500 text-xs font-black flex items-center justify-center shrink-0">
-                        {n}
+              <div className="space-y-5">
+                {/* Confirmación */}
+                <div className="text-center space-y-4">
+                  <div className="w-20 h-20 rounded-full bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center mx-auto">
+                    <span className="text-4xl">✓</span>
+                  </div>
+                  <div>
+                    <h3 className="font-display text-2xl font-bold text-white mb-2">Pedido enviado</h3>
+                    <p className="text-white/40 text-sm font-sans leading-relaxed">
+                      WhatsApp se abrió con tu resumen.<br />
+                      <strong className="text-white/70">Envía el mensaje</strong> para confirmar.
+                    </p>
+                  </div>
+                  <div className="rounded-2xl border border-white/6 bg-obsidian-50 p-5 text-left space-y-3">
+                    {[
+                      ['1', 'Envía el mensaje en WhatsApp'],
+                      ['2', 'Confirmamos disponibilidad'],
+                      ['3', 'Coordinamos entrega y pago'],
+                    ].map(([n, t]) => (
+                      <div key={n} className="flex items-center gap-3">
+                        <div className="w-7 h-7 rounded-full bg-yellow-500/20 border border-yellow-500/30 text-yellow-500 text-xs font-black flex items-center justify-center shrink-0">
+                          {n}
+                        </div>
+                        <span className="text-sm text-white/60 font-sans">{t}</span>
                       </div>
-                      <span className="text-sm text-white/60 font-sans">{t}</span>
-                    </div>
-                  ))}
+                    ))}
+                  </div>
                 </div>
 
-                <button onClick={onClose} className="btn-dark w-full py-3.5">
-                  Seguir explorando →
-                </button>
+                {/* ── BANNER DE REGISTRO OPCIONAL ── */}
+                {!user && (
+                  <div className="rounded-2xl p-5 space-y-3"
+                    style={{ background: 'rgba(212,168,83,0.07)', border: '1px solid rgba(212,168,83,0.2)' }}>
+                    <div className="flex items-start gap-3">
+                      <span className="text-2xl">⭐</span>
+                      <div>
+                        <p className="text-white font-semibold text-sm font-sans mb-1">
+                          ¿Quieres guardar tus datos?
+                        </p>
+                        <p className="text-white/40 text-xs font-sans leading-relaxed">
+                          Crea una cuenta gratis y la próxima vez tu nombre y correo se llenarán solos.
+                        </p>
+                      </div>
+                    </div>
+                    <button onClick={() => setShowAuth(true)}
+                      className="w-full py-3 rounded-xl font-bold text-sm font-sans transition-all"
+                      style={{ background: 'linear-gradient(135deg, #d4a853, #b8922e)', color: '#0d1520' }}>
+                      Crear cuenta gratis →
+                    </button>
+                    <button onClick={onClose}
+                      className="w-full py-2 text-xs font-sans text-white/25 hover:text-white/50 transition-colors">
+                      No, gracias
+                    </button>
+                  </div>
+                )}
+
+                {/* Si ya tiene sesión, solo botón de cerrar */}
+                {user && (
+                  <button onClick={onClose} className="btn-dark w-full py-3.5">
+                    Seguir explorando →
+                  </button>
+                )}
               </div>
             )}
           </div>
         </div>
       </div>
+
+      {/* AuthModal — aparece encima del checkout */}
+      {showAuth && (
+        <AuthModal
+          onClose={() => setShowAuth(false)}
+          onSuccess={handleAuthSuccess}
+          message="Crea tu cuenta para que la próxima compra sea más rápida."
+        />
+      )}
     </>
   )
 }
