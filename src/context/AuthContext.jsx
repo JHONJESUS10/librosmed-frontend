@@ -1,49 +1,76 @@
 import React, { createContext, useContext, useState, useEffect } from 'react'
 
-// ══════════════════════════════════════════════
-//  CREDENCIALES DEL DUEÑO
-//  Cambia estos valores antes de publicar
-// ══════════════════════════════════════════════
-const OWNER_USER = 'jhony'
-const OWNER_PASS = 'jhony1234'
-// ══════════════════════════════════════════════
+const API = import.meta.env.VITE_API_URL || 'http://localhost:5000/api'
 
 const AuthContext = createContext(null)
 
 export function AuthProvider({ children }) {
-  const [isAuth, setIsAuth] = useState(() => {
-    // Persiste la sesión en localStorage con expiración de 8 horas
-    try {
-      const saved = localStorage.getItem('lm_auth')
-      if (!saved) return false
-      const { token, exp } = JSON.parse(saved)
-      if (Date.now() > exp) { localStorage.removeItem('lm_auth'); return false }
-      return token === btoa(`${OWNER_USER}:${OWNER_PASS}`)
-    } catch { return false }
-  })
-
+  const [isAuth,     setIsAuth]     = useState(false)
+  const [adminData,  setAdminData]  = useState(null)   // { id, name, email, role }
   const [loginError, setLoginError] = useState('')
 
-  const login = (username, password) => {
-    if (username.trim() === OWNER_USER && password === OWNER_PASS) {
-      const token = btoa(`${OWNER_USER}:${OWNER_PASS}`)
-      const exp   = Date.now() + 8 * 60 * 60 * 1000 // 8 horas
-      localStorage.setItem('lm_auth', JSON.stringify({ token, exp }))
+  // Restaurar sesión al cargar
+  useEffect(() => {
+    try {
+      const token = localStorage.getItem('lm_admin_token')
+      const data  = localStorage.getItem('lm_admin_data')
+      if (token && data) {
+        // Verificar que el token no haya expirado decodificando el payload
+        const payload = JSON.parse(atob(token.split('.')[1]))
+        if (payload.exp * 1000 > Date.now()) {
+          setIsAuth(true)
+          setAdminData(JSON.parse(data))
+        } else {
+          localStorage.removeItem('lm_admin_token')
+          localStorage.removeItem('lm_admin_data')
+        }
+      }
+    } catch {}
+  }, [])
+
+  // Login contra el backend
+  const login = async (email, password) => {
+    setLoginError('')
+    try {
+      const res  = await fetch(`${API}/admin/auth/login`, {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ email, password }),
+      })
+      const data = await res.json()
+
+      if (!res.ok) {
+        setLoginError(data.error || 'Credenciales incorrectas.')
+        return false
+      }
+
+      localStorage.setItem('lm_admin_token', data.token)
+      localStorage.setItem('lm_admin_data',  JSON.stringify(data.admin))
       setIsAuth(true)
-      setLoginError('')
+      setAdminData(data.admin)
       return true
+    } catch {
+      setLoginError('Error de conexión con el servidor.')
+      return false
     }
-    setLoginError('Usuario o contraseña incorrectos.')
-    return false
   }
 
   const logout = () => {
-    localStorage.removeItem('lm_auth')
+    localStorage.removeItem('lm_admin_token')
+    localStorage.removeItem('lm_admin_data')
     setIsAuth(false)
+    setAdminData(null)
   }
 
+  const getToken = () => localStorage.getItem('lm_admin_token')
+
+  const isMainAdmin = () => adminData?.role === 'main'
+
   return (
-    <AuthContext.Provider value={{ isAuth, login, logout, loginError, setLoginError }}>
+    <AuthContext.Provider value={{
+      isAuth, adminData, loginError, setLoginError,
+      login, logout, getToken, isMainAdmin,
+    }}>
       {children}
     </AuthContext.Provider>
   )

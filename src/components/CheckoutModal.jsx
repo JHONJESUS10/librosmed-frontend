@@ -5,6 +5,7 @@ import AuthModal from './AuthModal'
 //  CAMBIA ESTE NÚMERO POR EL TUYO
 const WHATSAPP_NUMBER = '51983553140'
 // ═══════════════════════════════════
+const API = import.meta.env.VITE_API_URL || 'http://localhost:5000/api'
 
 export default function CheckoutModal({ items, total, onClose, clearCart }) {
   const [step,       setStep]       = useState('form')   // 'form' | 'success'
@@ -28,7 +29,7 @@ export default function CheckoutModal({ items, total, onClose, clearCart }) {
     } catch {}
   }, [])
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault()
     if (!form.name.trim()) { setError('Por favor ingresa tu nombre.'); return }
 
@@ -47,6 +48,22 @@ export default function CheckoutModal({ items, total, onClose, clearCart }) {
       '─────────────────────',
       '✅ Confirmar disponibilidad y coordinar entrega.',
     ].filter(Boolean).join('\n')
+
+    // Registrar venta en el backend
+    try {
+      const userToken = localStorage.getItem('lm_token')
+      await fetch(`${API}/sales`, {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          customer_name:  form.name.trim(),
+          customer_email: form.email.trim() || null,
+          shipping:       envio,
+          user_token:     userToken || null,
+          items: items.map(i => ({ product_id: i.id, quantity: i.quantity })),
+        }),
+      })
+    } catch {}
 
     window.open(`https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(msg)}`, '_blank', 'noopener,noreferrer')
     clearCart()
